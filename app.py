@@ -2,86 +2,76 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from shapely.geometry import Polygon
-import pandas as pd
+import time
 
-# Page setup for Mobile & Desktop
 st.set_page_config(page_title="LankaLand Pro", layout="wide", page_icon="🌾")
 
-# Premium Custom Styling (LinkedIn-ready UI)
+# Custom UI for Mobile
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-image: linear-gradient(to right, #1b5e20, #2e7d32); color: white; font-weight: bold; border: none; }
-    .stNumberInput input { border-radius: 8px; }
-    .title-text { color: #1b5e20; text-align: center; font-weight: bold; }
+    .stButton>button { width: 100%; border-radius: 15px; height: 3.5em; font-weight: bold; }
+    .main { background-color: #f8f9fa; }
     </style>
     """, unsafe_allow_html=True)
 
-# Language Toggle in Sidebar
-lang = st.sidebar.radio("🌐 භාෂාව තෝරන්න / Language", ["සිංහල", "English"])
+st.title("🌾 LankaLand Pro")
 
-if lang == "සිංහල":
-    st.markdown("<h1 class='title-text'>📝 LankaLand Pro - Land surveying system</h1>", unsafe_allow_html=True)
-    st.info("📍 උපදෙස්: සිතියම මත ඉඩමේ කොන් (Points) සලකුණු කරන්න. ඉන්පසු එය අසමාන කොටස් වලට බෙදන්න.")
-    area_lbl = "මුළු වර්ගඵලය"
-    split_lbl = "ඉඩම බෙදීම (Land Split)"
-else:
-    st.markdown("<h1 class='title-text'>📝 LankaLand Pro - Smart Survey Tool</h1>", unsafe_allow_html=True)
-    st.info("📍 Instructions: Mark land boundary points on the map. Then use the splitting tool.")
-    area_lbl = "Total Area"
-    split_lbl = "Land Split"
-
-# Initialize Session State
+# Session State for points
 if 'points' not in st.session_state:
     st.session_state.points = []
 
-# Layout for Map and Tools
+# Sidebar for Logic
+st.sidebar.header("🕹️ පාලක පුවරුව")
+mode = st.sidebar.radio("මැනුම් ක්‍රමය තෝරන්න:", ["සිතියම මත ලකුණු කිරීම (Manual)", "ඇවිදිමින් ලකුණු කිරීම (GPS Walking)"])
+
+# GPS Walking Mode UI
+if mode == "ඇවිදිමින් ලකුණු කිරීම (GPS Walking)":
+    st.warning("📍 මෙම ක්‍රමයේදී ඔබ ඉඩමේ මායිම දිගේ ඇවිද යා යුතුය.")
+    if st.button("දැන් මම ඉන්න තැන ලකුණු කරන්න (Add My Location)"):
+        # JavaScript පාවිච්චි කරලා Phone එකේ GPS එක ගන්න එක මෙතනදී වෙන්නේ
+        st.info("පෝන් එකේ GPS දත්ත ලබා ගනිමින්... (මොහොතක් රැඳෙන්න)")
+        # සටහන: Browser එකේ Location permissions ඕනේ. 
+        # දැනට අපි simulation එකක් පාවිච්චි කරමු. ඇත්තම GPS එක Browser API එකෙන් එන්නේ.
+
+# Main Columns
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # Professional Google Satellite Map
-    m = folium.Map(location=[7.8731, 80.7718], zoom_start=8, 
-                   tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite Hybrid")
+    # Map Setup
+    m = folium.Map(location=[7.8731, 80.7718], zoom_start=15, 
+                   tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
     
-    # Draw points and lines
+    # Draw logic
     for p in st.session_state.points:
-        folium.Marker(location=[p[0], p[1]], icon=folium.Icon(color='green', icon='info-sign')).add_to(m)
+        folium.Marker(location=[p[0], p[1]], icon=folium.Icon(color='green')).add_to(m)
     
     if len(st.session_state.points) >= 3:
-        folium.Polygon(locations=st.session_state.points, color="#ffff00", weight=4, fill=True, fill_opacity=0.4).add_to(m)
+        folium.Polygon(locations=st.session_state.points, color="yellow", fill=True, fill_opacity=0.4).add_to(m)
 
     m.add_child(folium.LatLngPopup())
     map_data = st_folium(m, height=450, width="100%")
 
-    if map_data['last_clicked']:
+    # Manual Click Logic
+    if mode == "සිතියම මත ලකුණු කිරීම (Manual)" and map_data['last_clicked']:
         pos = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
         if pos not in st.session_state.points:
             st.session_state.points.append(pos)
             st.rerun()
 
 with col2:
-    st.subheader("🛠️ " + ("පාලක පුවරුව" if lang=="සිංහල" else "Dashboard"))
+    st.subheader("📊 දත්ත සාරාංශය")
+    st.write(f"ලකුණු කළ ප්‍රමාණය: **{len(st.session_state.points)}**")
     
-    if st.button("Reset (සියල්ල මකන්න)"):
+    if st.button("සියල්ල මකන්න (Reset)"):
         st.session_state.points = []
         st.rerun()
 
     if len(st.session_state.points) >= 3:
-        # Land Logic
-        st.success("✅ " + ("ඉඩම හඳුනා ගන්නා ලදී" if lang=="සිංහල" else "Land Detected"))
-        
-        # Display Area (Placeholder for calculation logic)
-        st.metric(label=area_lbl, value="ගණනය කරමින්...")
-
-        st.markdown("---")
-        st.subheader("✂️ " + split_lbl)
-        
-        # Land Split Logic UI
-        part_name = st.text_input("කොටසේ නම (e.g., කොටස 01):")
-        portion = st.number_input("බෙදිය යුතු ප්‍රමාණය (Perches):", min_value=0.0)
-        
-        if st.button("ඉඩම බෙදන්න (Generate Split)"):
-            st.warning("අසමාන කොටස් වලට බෙදන Logic එක ක්‍රියාත්මක වේ...")
+        st.success("✅ මායිම් හඳුනාගන්නා ලදී!")
+        st.write("---")
+        st.subheader("✂️ ඉඩම බෙදීම")
+        st.number_input("බෙදිය යුතු පර්චස් ප්‍රමාණය:", min_value=0.0)
+        st.button("බෙදුම් මායිම් ගණනය කරන්න")
 
 st.markdown("---")
-st.markdown("<p style='text-align: center;'>Developed by <b>Bhathiya</b> | Building Digital Solutions for Sri Lanka</p>", unsafe_allow_html=True)
+st.caption("Developed by Bhathiya | LankaLand Pro v2.0")
