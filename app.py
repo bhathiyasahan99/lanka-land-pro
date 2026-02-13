@@ -5,54 +5,55 @@ from folium.plugins import LocateControl
 from shapely.geometry import Polygon
 import math
 
+# Page Config
 st.set_page_config(page_title="LankaLand Pro", layout="wide", page_icon="🌾")
 
-# High Contrast UI Styling - No more green mess
+# Professional Green Theme with High-Contrast Text
 st.markdown("""
     <style>
-    /* මුළු interface එකේම පසුබිම සහ අකුරු */
-    .stApp {
-        background-color: #ffffff;
+    /* මුළු App එකේම අකුරු කළු පාටට lock කිරීම */
+    [data-testid="stAppViewContainer"] * {
+        color: #000000 !important;
     }
     
+    /* Headers සහ Labels තද කොළ පාටින් */
+    h1, h2, h3, label {
+        color: #1b5e20 !important;
+        font-weight: 900 !important;
+    }
+
     /* Input Boxes - සුදු පසුබිම සහ තද කළු අකුරු */
-    input[type="text"], input[type="number"], .stNumberInput div, .stTextInput div {
-        background-color: #f9f9f9 !important;
+    .stNumberInput input, .stTextInput input {
+        background-color: #ffffff !important;
         color: #000000 !important;
-        border: 2px solid #333333 !important; /* තද බෝඩර් එකක් */
-        font-size: 18px !important;
         font-weight: bold !important;
+        border: 2px solid #1b5e20 !important;
     }
-    
-    /* Labels - තද කළු පාට */
-    label, p, h1, h2, h3 {
-        color: #000000 !important;
+
+    /* Buttons - කලින් තිබුණ ලස්සන Green එක */
+    .stButton>button {
+        width: 100%;
+        border-radius: 12px;
+        height: 3.5em;
+        font-weight: bold;
+        background-image: linear-gradient(to right, #1b5e20, #2e7d32);
+        color: white !important; /* බටන් අකුරු විතරක් සුදුයි */
+        border: none;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    /* Metric Cards - දත්ත පුවරුව */
+    div[data-testid="stMetricValue"] {
+        color: #1b5e20 !important;
         font-weight: 800 !important;
     }
 
-    /* Buttons - පැහැදිලිව පෙනෙන ලෙස */
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        height: 3.5em;
-        font-weight: bold;
-        background-color: #000000 !important;
-        color: #ffffff !important;
-        border: none;
-        font-size: 16px;
-    }
-    
-    /* Metric Cards */
-    [data-testid="stMetricValue"] {
-        color: #1b5e20 !important;
-        font-size: 30px !important;
-    }
-    
     .selection-box {
         text-align: center;
-        padding: 40px;
-        background-color: #f0f2f6;
-        border-radius: 15px;
+        padding: 50px;
+        background-color: #e8f5e9;
+        border-radius: 20px;
+        border: 2px solid #1b5e20;
         margin-top: 50px;
     }
     </style>
@@ -68,7 +69,7 @@ if 'points' not in st.session_state:
 # --- පියවර 1: මෙනුව ---
 if st.session_state.method is None:
     st.markdown("<div class='selection-box'>", unsafe_allow_html=True)
-    st.subheader("කරුණාකර ක්‍රමය තෝරන්න")
+    st.subheader("කරුණාකර මැනුම් ක්‍රමවේදය තෝරන්න")
     col_a, col_b = st.columns(2)
     with col_a:
         if st.button("📍 සිතියම මත ලකුණු කිරීම"):
@@ -81,18 +82,21 @@ if st.session_state.method is None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 else:
-    # --- පියවර 2: වැඩ කරන පිටුව ---
-    st.sidebar.button("⬅️ ආපසු (Back)", on_click=lambda: st.session_state.update({"method": None, "points": []}))
+    # Sidebar back button
+    st.sidebar.button("⬅️ Back to Menu", on_click=lambda: st.session_state.update({"method": None, "points": []}))
 
     col_map, col_tools = st.columns([2, 1])
 
     with col_map:
+        # Map
         m = folium.Map(location=[7.8731, 80.7718], zoom_start=15, 
                        tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
+        
+        # Locate Control (The Target Icon)
         LocateControl(auto_start=False, flyTo=True).add_to(m)
 
         for p in st.session_state.points:
-            folium.Marker(location=[p[0], p[1]], icon=folium.Icon(color='red')).add_to(m)
+            folium.Marker(location=[p[0], p[1]], icon=folium.Icon(color='green')).add_to(m)
         
         if len(st.session_state.points) >= 3:
             folium.Polygon(locations=st.session_state.points, color="yellow", weight=4, fill=True, fill_opacity=0.3).add_to(m)
@@ -106,7 +110,7 @@ else:
                 st.rerun()
 
     with col_tools:
-        st.subheader("📊 තොරතුරු")
+        st.subheader("📊 දත්ත වාර්තාව")
         
         if len(st.session_state.points) >= 3:
             poly = Polygon(st.session_state.points)
@@ -114,22 +118,22 @@ else:
             area_p = area_m2 / 25.29
             st.metric("මුළු පර්චස්", f"{area_p:.2f}")
         
-        if st.button("🔄 මකන්න (Reset)"):
+        if st.button("🔄 Reset Map"):
             st.session_state.points = []
             st.rerun()
 
         st.markdown("---")
         st.subheader("✂️ ඉඩම බෙදීම")
         
-        # පැහැදිලිව පෙනෙන Input boxes
-        split_val = st.number_input("බෙදිය යුතු පර්චස් ගණන:", min_value=0.0, step=0.1)
-        portion_name = st.text_input("කොටසේ නම (උදා: කැබැල්ල 1):")
+        # High contrast inputs with green borders
+        split_val = st.number_input("වෙන් කළ යුතු පර්චස්:", min_value=0.0, step=0.1)
+        portion_name = st.text_input("කොටසේ නම:", value="Part 01")
         
-        if st.button("🚀 බෙදුම් රේඛාව අඳින්න"):
+        if st.button("🚀 Calculate Split"):
             if len(st.session_state.points) >= 3:
-                st.success(f"{portion_name} සඳහා {split_val} රේඛාව ගණනය කරයි...")
+                st.success(f"{portion_name} සඳහා {split_val} වෙන් කරමින්...")
             else:
                 st.error("ලක්ෂ්‍ය 3ක් ලකුණු කරන්න.")
 
 st.markdown("---")
-st.caption("Developed by Bhathiya | High Contrast Version")
+st.caption("Developed by Bhathiya | Professional & Stylish v11.0")
