@@ -8,95 +8,98 @@ import math
 # Page Setup
 st.set_page_config(page_title="LankaLand Pro", layout="wide", page_icon="🌾")
 
-# Professional UI Styling
+# Standard High Contrast Styling
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
     h1, h2, h3, p, label { color: #1a1a1a !important; font-weight: 800 !important; }
-    .stButton>button { background-color: #1b5e20 !important; color: white !important; border-radius: 8px; font-weight: bold; height: 3.5em; }
-    .method-card { background: white; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-top: 50px; }
-    .edit-mode-box { background-color: #fff3e0; padding: 10px; border-radius: 10px; border: 2px solid #ff9800; margin-bottom: 10px; text-align: center; }
+    .stButton>button { background-color: #1b5e20 !important; color: white !important; border-radius: 8px; font-weight: bold; }
+    .edit-active { background-color: #d32f2f !important; color: white !important; }
+    .status-msg { padding: 10px; border-radius: 8px; background-color: #fff3e0; border: 1px solid #ff9800; text-align: center; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown("<h1 style='text-align: center;'>🌾 LankaLand Pro</h1>", unsafe_allow_html=True)
 
-# Session States initialization
+# Session States
 if 'method' not in st.session_state: st.session_state.method = None
 if 'points' not in st.session_state: st.session_state.points = []
-if 'edit_idx' not in st.session_state: st.session_state.edit_idx = None
+if 'edit_mode' in st.session_state == False: st.session_state.edit_mode = -1
 
-# --- පියවර 1: මෙනුව (Selection Screen) ---
+# --- පියවර 1: මෙනුව ---
 if st.session_state.method is None:
-    st.markdown("<div class='method-card'>", unsafe_allow_html=True)
-    st.subheader("මැනුම් ක්‍රමවේදය තෝරන්න")
-    col_a, col_b = st.columns(2)
-    with col_a:
+    st.markdown("<br><div style='text-align:center; padding:50px; background:white; border-radius:20px; box-shadow:0 5px 15px rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
+    st.subheader("ක්‍රමවේදය තෝරන්න")
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("📍 සිතියම මත ලකුණු කිරීම"):
             st.session_state.method = "manual"; st.rerun()
-    with col_b:
+    with c2:
         if st.button("🚶 ඇවිදිමින් ලකුණු කිරීම (GPS)"):
             st.session_state.method = "gps"; st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
 else:
-    # --- පියවර 2: වැඩ කරන පිටුව ---
-    st.sidebar.button("⬅️ Back to Menu", on_click=lambda: st.session_state.update({"method": None, "points": [], "edit_idx": None}))
+    # --- පියවර 2: Surveying Page ---
+    st.sidebar.button("⬅️ Back to Menu", on_click=lambda: st.session_state.update({"method": None, "points": [], "edit_mode": -1}))
 
     col_map, col_tools = st.columns([2.5, 1])
 
     with col_map:
-        # Map configuration
+        # Map Create
         m = folium.Map(location=[7.8731, 80.7718], zoom_start=15, 
                        tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
-        
-        # GPS Tracker
         LocateControl(auto_start=False, flyTo=True).add_to(m)
 
-        # Plot points with Touch-Selection Logic
+        # Draw Points
         for i, p in enumerate(st.session_state.points):
-            color = 'orange' if st.session_state.edit_idx == i else 'green'
+            is_editing = (st.session_state.get('edit_mode', -1) == i)
+            color = "orange" if is_editing else "green"
             folium.Marker(
                 location=[p[0], p[1]],
-                icon=folium.DivIcon(html=f'<div style="font-size: 12pt; color: white; background: {color}; border-radius: 50%; width: 24px; height: 24px; text-align: center; border: 2px solid white; line-height: 24px;">{i+1}</div>')
+                icon=folium.DivIcon(html=f'<div style="font-size: 12pt; color: white; background: {color}; border-radius: 50%; width: 26px; height: 26px; text-align: center; border: 2px solid white; line-height: 26px; font-weight:bold;">{i+1}</div>'),
             ).add_to(m)
         
         if len(st.session_state.points) >= 3:
             folium.Polygon(locations=st.session_state.points, color="#ffff00", weight=3, fill=True, fill_opacity=0.3).add_to(m)
 
-        map_data = st_folium(m, height=550, width="100%", use_container_width=True)
+        # Map display
+        map_data = st_folium(m, height=550, width="100%", use_container_width=True, key="survey_map")
 
-        # --- Click/Touch Logic (Adding & Adjusting) ---
+        # --- SMART MOVE LOGIC ---
         if map_data['last_clicked']:
-            clicked_pos = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
+            new_pos = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
             
-            # මාරු කිරීම (Move)
-            if st.session_state.edit_idx is not None:
-                st.session_state.points[st.session_state.edit_idx] = clicked_pos
-                st.session_state.edit_idx = None
+            # 1. පරණ එකක් තෝරාගෙන තිබේ නම් එය මාරු කරන්න
+            if st.session_state.get('edit_mode', -1) != -1:
+                idx = st.session_state.edit_mode
+                st.session_state.points[idx] = new_pos
+                st.session_state.edit_mode = -1 # Clear edit mode
                 st.rerun()
             
-            # තෝරාගැනීම හෝ අලුතින් එක් කිරීම
+            # 2. අලුතින් පොයින්ට් එකක් එකතු කිරීම
             else:
+                # චෙක් කරනවා පරණ එකක් උඩද ක්ලික් කළේ කියලා (Selection)
                 found = False
                 for i, p in enumerate(st.session_state.points):
-                    # පරණ පොයින්ට් එකක් උඩ ක්ලික් කළාදැයි පරීක්ෂාව
-                    if abs(p[0] - clicked_pos[0]) < 0.00015 and abs(p[1] - clicked_pos[1]) < 0.00015:
-                        st.session_state.edit_idx = i
+                    dist = math.sqrt((p[0]-new_pos[0])**2 + (p[1]-new_pos[1])**2)
+                    if dist < 0.0002: # ඉතා ආසන්න නම්
+                        st.session_state.edit_mode = i
                         found = True
                         st.rerun()
                 
                 if not found:
-                    st.session_state.points.append(clicked_pos)
+                    st.session_state.points.append(new_pos)
                     st.rerun()
 
     with col_tools:
-        st.markdown(f"### 📊 වාර්තාව ({st.session_state.method.upper()})")
+        st.markdown(f"### 📊 දත්ත වාර්තාව")
         
-        if st.session_state.edit_idx is not None:
-            st.markdown(f"<div class='edit-mode-box'><b>Point {st.session_state.edit_idx + 1} තෝරා ඇත</b><br>දැන් එය තිබිය යුතු තැන මත ක්ලික් කරන්න.</div>", unsafe_allow_html=True)
+        # Edit Message
+        if st.session_state.get('edit_mode', -1) != -1:
+            st.markdown(f"<div class='status-msg'>📍 Point {st.session_state.edit_mode + 1} තෝරා ඇත. <br>එය තිබිය යුතු <b>අලුත් තැන</b> සිතියම මත ටච් කරන්න.</div>", unsafe_allow_html=True)
             if st.button("❌ අවලංගු කරන්න"):
-                st.session_state.edit_idx = None; st.rerun()
+                st.session_state.edit_mode = -1; st.rerun()
 
         if len(st.session_state.points) >= 3:
             poly = Polygon(st.session_state.points)
@@ -105,16 +108,16 @@ else:
             st.metric(label="මුළු පර්චස්", value=f"{area_p:.2f}")
 
         st.markdown("---")
-        if st.button("⬅️ Undo (අන්තිම එක මකන්න)"):
+        if st.button("⬅️ Undo Last"):
             if st.session_state.points: st.session_state.points.pop(); st.rerun()
         
         if st.button("🗑️ Reset All"):
-            st.session_state.points = []; st.session_state.edit_idx = None; st.rerun()
+            st.session_state.points = []; st.session_state.edit_mode = -1; st.rerun()
 
         st.markdown("---")
         st.subheader("✂️ ඉඩම බෙදීම")
-        st.number_input("පර්චස් ප්‍රමාණය:", min_value=0.0, step=0.1)
-        st.button("🚀 බෙදුම් රේඛාව අඳින්න")
+        st.number_input("පර්චස්:", min_value=0.0)
+        st.button("🚀 රේඛාව අඳින්න")
 
 st.markdown("---")
-st.caption("LankaLand Pro v15.0 | All Features Integrated")
+st.caption("LankaLand Pro v16.0 | Built for Precision")
