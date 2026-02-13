@@ -1,80 +1,83 @@
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import LocateControl
+from folium.plugins import LocateControl, Fullscreen, MeasureControl
 from shapely.geometry import Polygon
 import math
 
-# --- Configuration & Styling ---
-st.set_page_config(page_title="LankaLand Pro", layout="wide", page_icon="🌾")
+# --- Premium Global Standard UI ---
+st.set_page_config(page_title="LankaLand Pro GIS", layout="wide", page_icon="🗺️")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f8f9fa; }
-    h1, h2, h3, p, label { color: #1a1a1a !important; font-weight: 800 !important; }
-    .stButton>button { background-color: #1b5e20 !important; color: white !important; border-radius: 8px; font-weight: bold; }
-    .split-panel { background: white; padding: 20px; border-radius: 15px; border: 2px solid #1b5e20; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .rem-box { background-color: #fff3e0; padding: 10px; border-radius: 8px; border: 1px solid #ff9800; margin-top: 10px; font-weight: bold; }
-    input { color: black !important; font-weight: bold !important; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    .stApp { background-color: #0e1117; color: white; }
+    .main-header { background: linear-gradient(90deg, #1b5e20, #4caf50); padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; background: #2e7d32 !important; border: none; font-weight: 800; transition: 0.3s; }
+    .stButton>button:hover { background: #43a047 !important; transform: translateY(-2px); }
+    .card { background: #1d2129; padding: 20px; border-radius: 15px; border: 1px solid #30363d; margin-bottom: 15px; }
+    .metric-val { font-size: 24px; font-weight: 800; color: #4caf50; }
+    .rem-highlight { color: #ff5252; font-weight: bold; border-left: 4px solid #ff5252; padding-left: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center;'>🌾 LankaLand Pro</h1>", unsafe_allow_html=True)
-
-# --- Initialization ---
+# --- Initializing Engine ---
 if 'method' not in st.session_state: st.session_state.method = None
 if 'points' not in st.session_state: st.session_state.points = []
 if 'edit_idx' not in st.session_state: st.session_state.edit_idx = -1
-if 'split_data' not in st.session_state: st.session_state.split_data = None
+if 'final_plots' not in st.session_state: st.session_state.final_plots = []
 
-# --- Main Selection Menu ---
+# --- Landing Page ---
 if st.session_state.method is None:
-    st.markdown("<div style='text-align:center; padding:50px; background:white; border-radius:20px; margin-top:50px;'>", unsafe_allow_html=True)
-    st.subheader("ක්‍රමවේදය තෝරන්න")
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("📍 සිතියම මත ලකුණු කිරීම"):
+    st.markdown("<div class='main-header'><h1>🌍 LANKALAND PRO GIS v24.0</h1><p>International Standard Land Surveying & Subdivision System</p></div>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗺️ MANUAL SATELLITE MARKING"):
             st.session_state.method = "manual"; st.rerun()
-    with c2:
-        if st.button("🚶 ඇවිදිමින් ලකුණු කිරීම (GPS)"):
+    with col2:
+        if st.button("🛰️ LIVE GPS FIELD SURVEY"):
             st.session_state.method = "gps"; st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
 else:
-    st.sidebar.button("⬅️ ආපසු", on_click=lambda: st.session_state.update({"method": None, "points": [], "edit_idx": -1, "split_data": None}))
+    # --- Professional Dashboard ---
+    st.sidebar.markdown("### 🛠️ NAVIGATION")
+    if st.sidebar.button("🔙 EXIT TO MAIN MENU"):
+        st.session_state.update({"method": None, "points": [], "edit_idx": -1, "final_plots": []})
+        st.rerun()
 
     col_map, col_tools = st.columns([2.5, 1])
 
     with col_map:
-        m = folium.Map(location=[7.8731, 80.7718], zoom_start=15, 
+        # High Resolution Map
+        m = folium.Map(location=[7.8731, 80.7718], zoom_start=18, 
                        tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
-        LocateControl(auto_start=False, flyTo=True).add_to(m)
-
-        # Plot boundary points
-        for i, p in enumerate(st.session_state.points):
-            color = 'orange' if st.session_state.edit_idx == i else 'green'
-            folium.Marker(location=p, icon=folium.DivIcon(html=f'<div style="font-size:11pt; color:white; background:{color}; border-radius:50%; width:24px; height:24px; text-align:center; border:2px solid white; line-height:24px;">{i+1}</div>')).add_to(m)
         
+        # Pro Tools
+        LocateControl(auto_start=False, flyTo=True).add_to(m)
+        Fullscreen().add_to(m)
+        MeasureControl(primary_length_unit='meters', secondary_length_unit='miles').add_to(m)
+
+        # Plot Subdivided Blocks
+        if st.session_state.final_plots:
+            for item in st.session_state.final_plots:
+                p_color = "#ff5252" if item['is_rem'] else "#4caf50"
+                folium.Polygon(
+                    locations=item['coords'], 
+                    color=p_color, weight=3, fill=True, fill_opacity=0.4,
+                    tooltip=f"BLOCK: {item['label']}"
+                ).add_to(m)
+
+        # Main Boundary & Markers
         if len(st.session_state.points) >= 3:
-            folium.Polygon(locations=st.session_state.points, color="#ffff00", weight=2, fill=True, fill_opacity=0.1).add_to(m)
+            folium.Polygon(locations=st.session_state.points, color="#ffeb3b", weight=4, fill=False).add_to(m)
 
-        # --- Subdivision Rendering ---
-        if st.session_state.split_data:
-            plots = st.session_state.split_data['plots']
-            rem_plot = st.session_state.split_data['remainder_plot']
-            colors = ['#2196F3', '#9C27B0', '#00BCD4', '#4CAF50', '#3F51B5']
-            
-            # Draw standard plots
-            for idx, plot in enumerate(plots):
-                folium.Polygon(locations=plot, color=colors[idx % len(colors)], weight=3, fill=True, fill_opacity=0.5, tooltip=f"කොටස {idx+1}").add_to(m)
-            
-            # Draw Remainder (Vivid Orange for 5 perch like bits)
-            if rem_plot:
-                folium.Polygon(locations=rem_plot, color="#FF3D00", weight=4, fill=True, fill_opacity=0.7, tooltip="ඉතිරි කොටස (Remainder)").add_to(m)
+        for i, p in enumerate(st.session_state.points):
+            m_color = 'orange' if st.session_state.edit_idx == i else '#4caf50'
+            folium.CircleMarker(location=p, radius=6, color=m_color, fill=True, tooltip=f"Point {i+1}").add_to(m)
 
-        map_data = st_folium(m, height=600, width="100%", use_container_width=True)
+        map_data = st_folium(m, height=650, width="100%", use_container_width=True)
 
-        # Move/Add Logic
+        # Interaction Logic
         if map_data['last_clicked']:
             clicked = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
             if st.session_state.edit_idx != -1:
@@ -83,74 +86,67 @@ else:
             else:
                 found = False
                 for i, p in enumerate(st.session_state.points):
-                    if math.sqrt((p[0]-clicked[0])**2 + (p[1]-clicked[1])**2) < 0.00015:
+                    if math.isclose(p[0], clicked[0], abs_tol=0.0001):
                         st.session_state.edit_idx = i; found = True; st.rerun()
                 if not found: st.session_state.points.append(clicked); st.rerun()
 
     with col_tools:
-        st.markdown("### 📊 වාර්තාව")
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("### 📊 ANALYTICS")
         area_p = 0.0
         if len(st.session_state.points) >= 3:
-            poly = Polygon(st.session_state.points)
-            area_m2 = abs(poly.area) * (111139 ** 2) * math.cos(math.radians(7.87))
+            main_poly = Polygon(st.session_state.points)
+            # Global standard area calc (m2 to perch)
+            area_m2 = abs(main_poly.area) * (111319.9 ** 2) * math.cos(math.radians(st.session_state.points[0][0]))
             area_p = area_m2 / 25.29
-            st.metric("මුළු ප්‍රමාණය", f"{area_p:.2f} Perch")
+            st.markdown(f"Total Area: <span class='metric-val'>{area_p:.2f} P</span>", unsafe_allow_html=True)
+            
+            # Smart Value Calc
+            price_per_p = st.number_input("Value per Perch (LKR):", min_value=0, value=100000, step=1000)
+            st.markdown(f"Total Value: **LKR { (area_p * price_per_p):,.0f}**")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- Subdivision Tools ---
         st.markdown("<div class='split-panel'>", unsafe_allow_html=True)
-        st.subheader("✂️ ඉඩම බෙදීමේ මෙවලම")
+        st.markdown("### 🏗️ SUBDIVISION ENGINE")
         
-        split_type = st.radio("බෙදුම් ක්‍රමය:", ["පර්චස් ප්‍රමාණය අනුව", "සමාන කොටස් ගණන අනුව"])
-        orient = st.radio("දිශාව:", ["සිරස් (Vertical)", "තිරස් (Horizontal)"])
+        mode = st.selectbox("Split Method:", ["Fixed Area (e.g. 25P)", "Equal Shares (e.g. 5 Lots)"])
+        target = st.number_input("Target Value:", min_value=1.0, value=25.0)
 
-        if split_type == "පර්චස් ප්‍රමාණය අනුව":
-            val = st.number_input("කැබැල්ලක පර්චස් ගණන:", min_value=1.0, value=25.0)
-            btn_label = "පර්චස් ගාණට බෙදන්න"
-        else:
-            val = st.number_input("බෙදිය යුතු කොටස් ගණන:", min_value=2, step=1)
-            btn_label = "සමාන කොටස් වලට බෙදන්න"
-
-        if st.button(btn_label):
+        if st.button("🚀 EXECUTE SUBDIVISION"):
             if area_p > 0:
+                st.session_state.final_plots = []
                 lats = [p[0] for p in st.session_state.points]
                 lons = [p[1] for p in st.session_state.points]
-                min_v, max_v = (min(lons), max(lons)) if orient == "සිරස් (Vertical)" else (min(lats), max(lats))
-                mode = 1 if orient == "සිරස් (Vertical)" else 0
                 
-                if split_type == "පර්චස් ප්‍රමාණය අනුව":
-                    count = int(area_p // val)
-                    rem_area = area_p % val
-                    total_steps = area_p / val
-                else:
-                    count = int(val)
-                    rem_area = 0
-                    total_steps = val
+                num_plots = int(area_p // target) if mode == "Fixed Area (e.g. 25P)" else int(target)
+                rem_p = area_p % target if mode == "Fixed Area (e.g. 25P)" else 0
                 
-                step = (max_v - min_v) / total_steps
-                all_plots = []
-                rem_plot = None
+                # Grid Generation Engine
+                cols = math.ceil(math.sqrt(num_plots))
+                rows = math.ceil(num_plots / cols)
+                lat_s, lon_s = (max(lats)-min(lats))/rows, (max(lons)-min(lons))/cols
                 
-                for j in range(count):
-                    v_low, v_high = min_v + (j * step), min_v + ((j+1) * step)
-                    nodes = [p for p in st.session_state.points if v_low <= p[mode] <= v_high]
-                    if len(nodes) >= 2: all_plots.append(nodes)
+                c = 0
+                for r in range(rows):
+                    for _c in range(cols):
+                        if c < num_plots:
+                            base = [min(lats) + r*lat_s, min(lons) + _c*lon_s]
+                            coords = [[base[0], base[1]], [base[0], base[1]+lon_s], [base[0]+lat_s, base[1]+lon_s], [base[0]+lat_s, base[1]]]
+                            st.session_state.final_plots.append({'coords': coords, 'label': f"Plot {c+1}", 'is_rem': False})
+                            c += 1
                 
-                if rem_area > 0:
-                    rem_nodes = [p for p in st.session_state.points if (min_v + count * step) <= p[mode] <= max_v]
-                    if len(rem_nodes) >= 2: rem_plot = rem_nodes
-
-                st.session_state.split_data = {'plots': all_plots, 'remainder_plot': rem_plot, 'rem_val': rem_area}
+                if rem_p > 0.5:
+                    st.session_state.final_plots.append({'coords': [[max(lats), max(lons)], [max(lats)-lat_s, max(lons)], [max(lats), max(lons)-lon_s]], 'label': f"REM {rem_p:.1f}P", 'is_rem': True})
                 st.rerun()
 
-        if st.session_state.split_data:
-            if st.session_state.split_data['rem_val'] > 0:
-                st.markdown(f"<div class='rem-box'>⚠️ ඉතිරි කොටස: {st.session_state.split_data['rem_val']:.2f} Perch (රතු පාටින්)</div>", unsafe_allow_html=True)
-            if st.button("🔄 බෙදීම් ඉවත් කරන්න"):
-                st.session_state.split_data = None; st.rerun()
+        if st.session_state.final_plots:
+            st.info(f"Subdivision Success: {len(st.session_state.final_plots)-1 if rem_p > 0.5 else len(st.session_state.final_plots)} Full Plots created.")
+            if st.button("🔄 CLEAR PLOTS"):
+                st.session_state.final_plots = []; st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("---")
-        st.button("🗑️ Reset All", on_click=lambda: st.session_state.update({"points": [], "split_data": None}))
+        if st.button("🗑️ RESET MAP"):
+            st.session_state.update({"points": [], "final_plots": []}); st.rerun()
 
-st.markdown("---")
-st.caption("LankaLand Pro v22.0 | Dual-Mode Subdivision")
+st.markdown("<br><p style='text-align:center; opacity:0.5;'>LankaLand Pro v24.0 | Advanced GIS Core</p>", unsafe_allow_html=True)
