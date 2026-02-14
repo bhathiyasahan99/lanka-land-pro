@@ -2,8 +2,7 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import LocateControl, Fullscreen, MeasureControl, Draw
-from shapely.geometry import Polygon, MultiPolygon, box, shape
-from shapely.ops import unary_union
+from shapely.geometry import Polygon, MultiPolygon, box
 import math
 import numpy as np
 
@@ -28,14 +27,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- Session State ---
+# --- Session State Management ---
 if 'lang' not in st.session_state: st.session_state.lang = None
 if 'method' not in st.session_state: st.session_state.method = None
 if 'points' not in st.session_state: st.session_state.points = []
 if 'final_plots' not in st.session_state: st.session_state.final_plots = []
 if 'orientation' not in st.session_state: st.session_state.orientation = "vertical"
 
-# --- Advanced Calculations ---
+# --- Math Functions ---
 def get_distance_meters(p1, p2):
     R = 6371000
     lat1, lon1 = math.radians(p1[0]), math.radians(p1[1])
@@ -44,11 +43,9 @@ def get_distance_meters(p1, p2):
 
 def get_actual_area_perch(poly):
     if poly is None or poly.is_empty: return 0.0
-    # Ensure it's a valid geometry
     if not hasattr(poly, 'exterior'): return 0.0
     coords = list(poly.exterior.coords)
     avg_lat = math.radians(coords[0][1])
-    # Coordinate conversion to meters (approx)
     area_m2 = poly.area * (111319.9 ** 2) * abs(math.cos(avg_lat))
     return area_m2 / 25.29
 
@@ -67,41 +64,43 @@ def split_equal_area(polygon, target_perch, orientation="vertical"):
         minx, miny, maxx, maxy = remaining_poly.bounds
         low, high = (minx, maxx) if orientation == "vertical" else (miny, maxy)
         
-        # Binary Search for Area Precision
+        # Binary Search for high precision area cutting
         for _ in range(25):
             mid = (low + high) / 2
-            blade = box(minx, miny, mid, maxy) if orientation == "vertical" else box(minx, miny, maxx, mid)
-            part = remaining_poly.intersection(blade)
-            if get_actual_area_perch(part) < target_perch:
-                low = mid
-            else:
+            blade = box(mid, miny, maxx, maxy) if orientation == "vertical" else box(minx, mid, maxx, maxy)
+            # We want to cut 'target_perch' from the other side
+            test_part = remaining_poly.difference(blade)
+            if get_actual_area_perch(test_part) < target_perch:
+                low = mid if orientation == "vertical" else low # Logic depends on direction
                 high = mid
+            else:
+                high = mid if orientation == "vertical" else high
+                low = mid
         
-        final_blade = box(minx, miny, high, maxy) if orientation == "vertical" else box(minx, miny, maxx, high)
-        plot = remaining_poly.intersection(final_blade)
+        # This part handles the split effectively
+        split_line = high
+        cutter = box(minx, miny, split_line, maxy) if orientation == "vertical" else box(minx, miny, maxx, split_line)
+        plot = remaining_poly.intersection(cutter)
         
-        # Handle GeometryCollections
-        if plot.geom_type == 'GeometryCollection':
-            for geom in plot.geoms:
-                if geom.geom_type == 'Polygon': plots.append(geom)
-        elif plot.geom_type == 'MultiPolygon':
-            for geom in plot.geoms: plots.append(geom)
-        elif plot.geom_type == 'Polygon':
-            plots.append(plot)
-            
-        remaining_poly = remaining_poly.difference(final_blade)
+        if not plot.is_empty:
+            if plot.geom_type == 'Polygon': plots.append(plot)
+            elif plot.geom_type in ['MultiPolygon', 'GeometryCollection']:
+                for g in plot.geoms:
+                    if g.geom_type == 'Polygon': plots.append(g)
+                    
+        remaining_poly = remaining_poly.difference(cutter)
         
     if not remaining_poly.is_empty and get_actual_area_perch(remaining_poly) > 0.05:
-        if remaining_poly.geom_type == 'Polygon': plots.append(remaining_poly)
+        plots.append(remaining_poly)
     return plots
 
 # --- UI Dictionary ---
 T_DICT = {
-    "si": {"title": "LANKALAND PRO GIS", "analytics": "මැනුම් වාර්තාව", "subdivision": "නිවැරදිව බෙදීම", "execute": "කට්ටි කරන්න", "reset": "සියල්ල මකන්න", "area": "වර්ගඵලය", "peri": "වටප්‍රමාණය", "mark_gps": "ස්ථානය සලකුණු කරන්න"},
-    "en": {"title": "LANKALAND PRO GIS", "analytics": "ANALYTICS", "subdivision": "SUBDIVISION", "execute": "EXECUTE ACCURATE SPLIT", "reset": "RESET ALL", "area": "Area", "peri": "Perimeter", "mark_gps": "MARK GPS LOCATION"}
+    "si": {"title": "LANKALAND PRO GIS", "analytics": "මැනුම් වාර්තාව", "subdivision": "කට්ටි කිරීම", "execute": "කට්ටි කරන්න", "reset": "සියල්ල මකන්න", "area": "වර්ගඵලය", "mark_gps": "ස්ථානය සලකුණු කරන්න", "undo": "පොයින්ට් එකක් මකන්න"},
+    "en": {"title": "LANKALAND PRO GIS", "analytics": "ANALYTICS", "subdivision": "SUBDIVISION", "execute": "EXECUTE SPLIT", "reset": "RESET ALL", "area": "Area", "mark_gps": "MARK GPS LOCATION", "undo": "UNDO POINT"}
 }
 
-# --- Main App ---
+# --- App Execution ---
 if st.session_state.lang is None:
     st.markdown("<div class='main-header'><h1>LANKALAND PRO</h1><h3>Select Language / භාෂාව තෝරන්න</h3></div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
@@ -114,7 +113,7 @@ else:
         st.rerun()
 
     if st.session_state.method is None:
-        st.markdown(f"<div class='main-header'><h1>{T['title']}</h1><p>Professional GIS Suite</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='main-header'><h1>{T['title']}</h1><p>Enterprise Surveying Suite</p></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         if c1.button("🗺️ MANUAL MARKING"): st.session_state.method = "manual"; st.rerun()
         if c2.button("🛰️ GPS LIVE SURVEY"): st.session_state.method = "gps"; st.rerun()
@@ -123,16 +122,16 @@ else:
         with col_map:
             m = folium.Map(location=[7.8731, 80.7718], zoom_start=19, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
             LocateControl(auto_start=(st.session_state.method == "gps")).add_to(m)
-            Draw(export=True, draw_options={'polyline':{'shapeOptions':{'color':'#ff5722'}}, 'circle':False, 'marker':True}).add_to(m)
+            Draw(export=True).add_to(m)
             Fullscreen().add_to(m); MeasureControl().add_to(m)
 
-            # Draw Output Plots
+            # Draw Final Plots
             for item in st.session_state.final_plots:
                 if hasattr(item, 'exterior'):
-                    area = get_actual_area_perch(item)
-                    folium.Polygon(locations=[(lat, lon) for lon, lat in item.exterior.coords], color="#00ff00", weight=2, fill=True, fill_opacity=0.4, tooltip=f"{area:.2f} Perch").add_to(m)
+                    a_val = get_actual_area_perch(item)
+                    folium.Polygon(locations=[(lat, lon) for lon, lat in item.exterior.coords], color="#00ff00", weight=2, fill=True, fill_opacity=0.4, tooltip=f"{a_val:.2f} P").add_to(m)
 
-            # Draw Main Boundary
+            # Draw Boundary & Distances
             if len(st.session_state.points) >= 2:
                 folium.Polygon(locations=st.session_state.points, color="yellow", weight=3, fill=False).add_to(m)
                 for i in range(len(st.session_state.points)):
@@ -144,24 +143,24 @@ else:
             for p in st.session_state.points:
                 folium.Marker(location=p, draggable=True, icon=folium.Icon(color="green")).add_to(m)
 
-            map_data = st_folium(m, height=650, width="100%", key="main_gis_map")
+            map_data = st_folium(m, height=650, width="100%", key="enterprise_map")
             if map_data['last_clicked'] and st.session_state.method == "manual":
                 st.session_state.points.append((map_data['last_clicked']['lat'], map_data['last_clicked']['lng']))
                 st.rerun()
 
         with col_tools:
             if len(st.session_state.points) >= 3:
-                main_poly = Polygon([(lon, lat) for lat, lon in st.session_state.points])
-                total_area, total_peri = calculate_detailed_area_func := (lambda p: (get_actual_area_perch(p), 0.0))(main_poly) 
-                # (Note: perimeter can be added back if needed using the function from previous code)
+                # Convert (lat, lon) to (lon, lat) for Shapely
+                shp_points = [(p[1], p[0]) for p in st.session_state.points]
+                main_poly = Polygon(shp_points)
+                total_area = get_actual_area_perch(main_poly)
                 
                 st.markdown(f"<div class='card'><h3>{T['analytics']}</h3>{T['area']}: <span class='metric-val'>{total_area:.2f} P</span></div>", unsafe_allow_html=True)
                 
                 st.markdown(f"<div class='card'><h3>{T['subdivision']}</h3>", unsafe_allow_html=True)
                 target = st.number_input("Target Perch", value=10.0, min_value=1.0)
-                c1, c2 = st.columns(2)
-                if c1.button("V Split"): st.session_state.orientation = "vertical"
-                if c2.button("H Split"): st.session_state.orientation = "horizontal"
+                if st.button("V - Split"): st.session_state.orientation = "vertical"; st.rerun()
+                if st.button("H - Split"): st.session_state.orientation = "horizontal"; st.rerun()
                 
                 if st.button(T['execute']):
                     st.session_state.final_plots = split_equal_area(main_poly, target, st.session_state.orientation)
@@ -172,11 +171,13 @@ else:
                 st.markdown("</div>", unsafe_allow_html=True)
 
             if st.session_state.method == "gps":
-                st.markdown(f"<div class='card'><h3>🛰️ GPS CONTROL</h3>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card'><h3>🛰️ GPS</h3>", unsafe_allow_html=True)
                 if st.button(T['mark_gps']):
                     if map_data['last_clicked']:
                         st.session_state.points.append((map_data['last_clicked']['lat'], map_data['last_clicked']['lng']))
                         st.rerun()
+                if st.button(T['undo']):
+                    if st.session_state.points: st.session_state.points.pop(); st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("<p style='text-align:center; opacity:0.3;'>LankaLand Pro v3.2 - Stable Build</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; opacity:0.3;'>LankaLand Pro Enterprise v3.3 - Stable</p>", unsafe_allow_html=True)
