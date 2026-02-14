@@ -6,7 +6,7 @@ from shapely.geometry import Polygon, MultiPolygon, box
 import math
 import numpy as np
 
-# --- Configuration & Styling ---
+# --- Configuration & Styling (Original Enterprise Theme) ---
 st.set_page_config(page_title="LankaLand Pro GIS | Enterprise", layout="wide", page_icon="🗺️")
 
 st.markdown("""
@@ -64,23 +64,17 @@ def split_equal_area(polygon, target_perch, orientation="vertical"):
         minx, miny, maxx, maxy = remaining_poly.bounds
         low, high = (minx, maxx) if orientation == "vertical" else (miny, maxy)
         
-        # Binary Search for high precision area cutting
         for _ in range(25):
             mid = (low + high) / 2
-            blade = box(mid, miny, maxx, maxy) if orientation == "vertical" else box(minx, mid, maxx, maxy)
-            # We want to cut 'target_perch' from the other side
-            test_part = remaining_poly.difference(blade)
-            if get_actual_area_perch(test_part) < target_perch:
-                low = mid if orientation == "vertical" else low # Logic depends on direction
-                high = mid
-            else:
-                high = mid if orientation == "vertical" else high
+            blade = box(minx, miny, mid, maxy) if orientation == "vertical" else box(minx, miny, maxx, mid)
+            part = remaining_poly.intersection(blade)
+            if get_actual_area_perch(part) < target_perch:
                 low = mid
+            else:
+                high = mid
         
-        # This part handles the split effectively
-        split_line = high
-        cutter = box(minx, miny, split_line, maxy) if orientation == "vertical" else box(minx, miny, maxx, split_line)
-        plot = remaining_poly.intersection(cutter)
+        final_blade = box(minx, miny, high, maxy) if orientation == "vertical" else box(minx, miny, maxx, high)
+        plot = remaining_poly.intersection(final_blade)
         
         if not plot.is_empty:
             if plot.geom_type == 'Polygon': plots.append(plot)
@@ -88,50 +82,91 @@ def split_equal_area(polygon, target_perch, orientation="vertical"):
                 for g in plot.geoms:
                     if g.geom_type == 'Polygon': plots.append(g)
                     
-        remaining_poly = remaining_poly.difference(cutter)
+        remaining_poly = remaining_poly.difference(final_blade)
         
     if not remaining_poly.is_empty and get_actual_area_perch(remaining_poly) > 0.05:
-        plots.append(remaining_poly)
+        if remaining_poly.geom_type == 'Polygon': plots.append(remaining_poly)
     return plots
 
-# --- UI Dictionary ---
+# --- Language Dictionary ---
 T_DICT = {
-    "si": {"title": "LANKALAND PRO GIS", "analytics": "මැනුම් වාර්තාව", "subdivision": "කට්ටි කිරීම", "execute": "කට්ටි කරන්න", "reset": "සියල්ල මකන්න", "area": "වර්ගඵලය", "mark_gps": "ස්ථානය සලකුණු කරන්න", "undo": "පොයින්ට් එකක් මකන්න"},
-    "en": {"title": "LANKALAND PRO GIS", "analytics": "ANALYTICS", "subdivision": "SUBDIVISION", "execute": "EXECUTE SPLIT", "reset": "RESET ALL", "area": "Area", "mark_gps": "MARK GPS LOCATION", "undo": "UNDO POINT"}
+    "si": {
+        "title": "🌍 LANKALAND PRO GIS | Enterprise",
+        "subtitle": "ජාත්‍යන්තර මට්ටමේ මැනුම් සහ සැලසුම් පද්ධතිය",
+        "manual": "🗺️ සිතියම මත ලකුණු කිරීම",
+        "gps": "🛰️ GPS මගින් ඇවිද ගොස් මැනීම",
+        "analytics": "📊 මැනුම් වාර්තාව",
+        "subdivision": "🏗️ කට්ටි කිරීමේ එන්ජිම",
+        "execute": "🚀 කට්ටි කර පෙන්වන්න",
+        "reset": "🗑️ සියල්ල මකන්න",
+        "area": "මුළු වර්ගඵලය",
+        "mark_gps": "📍 ස්ථානය සලකුණු කරන්න",
+        "undo": "↩️ අවසන් ලක්ෂ්‍යය මකන්න",
+        "back": "🔙 මුල් මෙනුවට",
+        "target": "කැබැල්ලක ප්‍රමාණය (Perch)",
+        "v_split": "සිරස්ව බෙදන්න",
+        "h_split": "තිරස්ව බෙදන්න"
+    },
+    "en": {
+        "title": "🌍 LANKALAND PRO GIS | Enterprise",
+        "subtitle": "International Standard Surveying System",
+        "manual": "🗺️ MANUAL MARKING",
+        "gps": "🛰️ LIVE GPS SURVEY",
+        "analytics": "📊 SURVEY ANALYTICS",
+        "subdivision": "🏗️ SUBDIVISION ENGINE",
+        "execute": "🚀 EXECUTE SPLIT",
+        "reset": "🗑️ RESET ALL",
+        "area": "Total Area",
+        "mark_gps": "📍 MARK LOCATION",
+        "undo": "↩️ UNDO LAST",
+        "back": "🔙 BACK TO MENU",
+        "target": "Target Area (Perch)",
+        "v_split": "Vertical Split",
+        "h_split": "Horizontal Split"
+    }
 }
 
-# --- App Execution ---
+# --- Main App ---
 if st.session_state.lang is None:
     st.markdown("<div class='main-header'><h1>LANKALAND PRO</h1><h3>Select Language / භාෂාව තෝරන්න</h3></div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    if c1.button("සිංහල"): st.session_state.lang = "si"; st.rerun()
-    if c2.button("English"): st.session_state.lang = "en"; st.rerun()
+    # භාෂාව තේරීමේ දෝෂය මෙහිදී නිවැරදි කර ඇත
+    if c1.button("සිංහල"): 
+        st.session_state.lang = "si"
+        st.rerun()
+    if c2.button("English"): 
+        st.session_state.lang = "en"
+        st.rerun()
 else:
     T = T_DICT[st.session_state.lang]
-    if st.sidebar.button("BACK TO MENU"):
-        st.session_state.update({"method":None, "points":[], "final_plots":[]})
+    
+    if st.sidebar.button(T['back']):
+        st.session_state.update({"method": None, "points": [], "final_plots": []})
         st.rerun()
 
     if st.session_state.method is None:
-        st.markdown(f"<div class='main-header'><h1>{T['title']}</h1><p>Enterprise Surveying Suite</p></div>", unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        if c1.button("🗺️ MANUAL MARKING"): st.session_state.method = "manual"; st.rerun()
-        if c2.button("🛰️ GPS LIVE SURVEY"): st.session_state.method = "gps"; st.rerun()
+        st.markdown(f"<div class='main-header'><h1>{T['title']}</h1><p>{T['subtitle']}</p></div>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        if col1.button(T['manual']): st.session_state.method = "manual"; st.rerun()
+        if col2.button(T['gps']): st.session_state.method = "gps"; st.rerun()
     else:
         col_map, col_tools = st.columns([2.5, 1])
+
         with col_map:
             m = folium.Map(location=[7.8731, 80.7718], zoom_start=19, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
             LocateControl(auto_start=(st.session_state.method == "gps")).add_to(m)
             Draw(export=True).add_to(m)
             Fullscreen().add_to(m); MeasureControl().add_to(m)
 
-            # Draw Final Plots
+            # 1. බෙදූ කට්ටි ඇඳීම (Equal Area Tooltip සමඟ)
             for item in st.session_state.final_plots:
                 if hasattr(item, 'exterior'):
-                    a_val = get_actual_area_perch(item)
-                    folium.Polygon(locations=[(lat, lon) for lon, lat in item.exterior.coords], color="#00ff00", weight=2, fill=True, fill_opacity=0.4, tooltip=f"{a_val:.2f} P").add_to(m)
+                    area_val = get_actual_area_perch(item)
+                    folium.Polygon(locations=[(lat, lon) for lon, lat in item.exterior.coords], 
+                                  color="#00ff00", weight=2, fill=True, fill_opacity=0.4, 
+                                  tooltip=f"{area_val:.2f} P").add_to(m)
 
-            # Draw Boundary & Distances
+            # 2. ප්‍රධාන මායිම සහ මීටර් ලේබල්
             if len(st.session_state.points) >= 2:
                 folium.Polygon(locations=st.session_state.points, color="yellow", weight=3, fill=False).add_to(m)
                 for i in range(len(st.session_state.points)):
@@ -140,27 +175,32 @@ else:
                     dist = get_distance_meters(p1, p2)
                     folium.Marker(mid, icon=folium.DivIcon(html=f'<div style="font-size:8pt; color:white; background:black; padding:2px; border-radius:3px;">{dist:.1f}m</div>')).add_to(m)
             
-            for p in st.session_state.points:
+            # 3. Draggable Markers
+            for i, p in enumerate(st.session_state.points):
                 folium.Marker(location=p, draggable=True, icon=folium.Icon(color="green")).add_to(m)
 
             map_data = st_folium(m, height=650, width="100%", key="enterprise_map")
+            
             if map_data['last_clicked'] and st.session_state.method == "manual":
                 st.session_state.points.append((map_data['last_clicked']['lat'], map_data['last_clicked']['lng']))
                 st.rerun()
 
         with col_tools:
+            # Analytics Card
             if len(st.session_state.points) >= 3:
-                # Convert (lat, lon) to (lon, lat) for Shapely
-                shp_points = [(p[1], p[0]) for p in st.session_state.points]
-                main_poly = Polygon(shp_points)
+                shp_pts = [(p[1], p[0]) for p in st.session_state.points]
+                main_poly = Polygon(shp_pts)
                 total_area = get_actual_area_perch(main_poly)
                 
                 st.markdown(f"<div class='card'><h3>{T['analytics']}</h3>{T['area']}: <span class='metric-val'>{total_area:.2f} P</span></div>", unsafe_allow_html=True)
                 
+                # Subdivision Card
                 st.markdown(f"<div class='card'><h3>{T['subdivision']}</h3>", unsafe_allow_html=True)
-                target = st.number_input("Target Perch", value=10.0, min_value=1.0)
-                if st.button("V - Split"): st.session_state.orientation = "vertical"; st.rerun()
-                if st.button("H - Split"): st.session_state.orientation = "horizontal"; st.rerun()
+                target = st.number_input(T['target'], value=10.0, min_value=1.0)
+                
+                c1, c2 = st.columns(2)
+                if c1.button(T['v_split']): st.session_state.orientation = "vertical"; st.rerun()
+                if c2.button(T['h_split']): st.session_state.orientation = "horizontal"; st.rerun()
                 
                 if st.button(T['execute']):
                     st.session_state.final_plots = split_equal_area(main_poly, target, st.session_state.orientation)
@@ -170,8 +210,9 @@ else:
                     st.session_state.points = []; st.session_state.final_plots = []; st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
+            # GPS Control (GPS Mode එකේදී පමණක් පෙනේ)
             if st.session_state.method == "gps":
-                st.markdown(f"<div class='card'><h3>🛰️ GPS</h3>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card'><h3>🛰️ GPS CONTROL</h3>", unsafe_allow_html=True)
                 if st.button(T['mark_gps']):
                     if map_data['last_clicked']:
                         st.session_state.points.append((map_data['last_clicked']['lat'], map_data['last_clicked']['lng']))
@@ -180,4 +221,4 @@ else:
                     if st.session_state.points: st.session_state.points.pop(); st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("<p style='text-align:center; opacity:0.3;'>LankaLand Pro Enterprise v3.3 - Stable</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; opacity:0.3;'>LankaLand Pro v3.4 - Fixed Language Logic</p>", unsafe_allow_html=True)
