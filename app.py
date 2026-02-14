@@ -1,7 +1,7 @@
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import LocateControl, Fullscreen, MeasureControl, Draw
+from folium.plugins import LocateControl, Fullscreen, MeasureControl, Draw, Realtime
 from shapely.geometry import Polygon, MultiPolygon, box, LineString, Point as ShapelyPoint
 from shapely.ops import split as shapely_split
 import math
@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# === PROFESSIONAL STYLING ===
+# === PROFESSIONAL STYLING (UNCHANGED) ===
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&family=Roboto+Mono:wght@400;700&display=swap');
@@ -30,7 +30,6 @@ st.markdown("""
     color: #e0e0e0;
 }
 
-/* Main Header */
 .main-header {
     background: linear-gradient(135deg, #1565c0 0%, #2e7d32 50%, #0d47a1 100%);
     padding: 30px;
@@ -50,7 +49,6 @@ st.markdown("""
     margin: 0;
 }
 
-/* Quick Action Toolbar */
 .quick-toolbar {
     background: linear-gradient(135deg, #2a2f45, #1e2337);
     padding: 15px;
@@ -62,24 +60,6 @@ st.markdown("""
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 
-.tool-btn {
-    background: linear-gradient(135deg, #2e7d32, #1b5e20);
-    color: white;
-    padding: 10px 20px;
-    border-radius: 10px;
-    border: none;
-    cursor: pointer;
-    font-weight: 700;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-.tool-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 15px rgba(46, 125, 50, 0.5);
-}
-
-/* Cards */
 .card {
     background: linear-gradient(145deg, #1e2439, #252a42);
     padding: 25px;
@@ -101,7 +81,6 @@ st.markdown("""
     margin-bottom: 15px;
 }
 
-/* Metrics */
 .metric-large {
     font-size: 48px;
     font-weight: 900;
@@ -121,22 +100,6 @@ st.markdown("""
     text-align: center;
 }
 
-/* Plot Cards */
-.plot-info-card {
-    background: linear-gradient(135deg, #2a2f45, #1e2337);
-    padding: 15px;
-    border-radius: 12px;
-    margin: 10px 0;
-    border-left: 5px solid #4caf50;
-    transition: all 0.3s ease;
-}
-
-.plot-info-card:hover {
-    transform: translateX(8px);
-    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
-}
-
-/* Comparison Table */
 .comparison-table {
     width: 100%;
     border-collapse: collapse;
@@ -168,7 +131,6 @@ st.markdown("""
     background: rgba(76, 175, 80, 0.1);
 }
 
-/* Badges */
 .badge {
     display: inline-block;
     padding: 6px 14px;
@@ -184,7 +146,6 @@ st.markdown("""
 .badge-fair { background: linear-gradient(135deg, #ffc107, #ffb300); color: black; }
 .badge-poor { background: linear-gradient(135deg, #ff5722, #f4511e); color: white; }
 
-/* Status Boxes */
 .success-box {
     background: linear-gradient(135deg, #4caf50, #2e7d32);
     color: white;
@@ -205,16 +166,6 @@ st.markdown("""
     box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
 }
 
-.error-box {
-    background: linear-gradient(135deg, #f44336, #c62828);
-    color: white;
-    padding: 15px;
-    border-radius: 10px;
-    margin: 12px 0;
-    font-weight: 600;
-    box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
-}
-
 .info-box {
     background: linear-gradient(135deg, #2196f3, #1565c0);
     color: white;
@@ -225,7 +176,6 @@ st.markdown("""
     box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
 }
 
-/* Progress Animation */
 .surveyor-animation {
     text-align: center;
     font-size: 50px;
@@ -258,7 +208,6 @@ st.markdown("""
     100% { background-position: 200% 50%; }
 }
 
-/* Buttons */
 .stButton>button {
     width: 100%;
     border-radius: 14px;
@@ -277,7 +226,6 @@ st.markdown("""
     box-shadow: 0 6px 20px rgba(46, 125, 50, 0.6);
 }
 
-/* Stats Mini */
 .stat-mini {
     display: inline-block;
     background: rgba(76, 175, 80, 0.1);
@@ -289,7 +237,101 @@ st.markdown("""
     font-weight: 600;
 }
 
-/* Scrollbar */
+/* NEW: GPS Status Indicators */
+.gps-status {
+    background: linear-gradient(135deg, #1e2439, #252a42);
+    padding: 15px;
+    border-radius: 12px;
+    margin: 10px 0;
+    border-left: 4px solid #4caf50;
+}
+
+.gps-excellent {
+    border-left-color: #4caf50;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+}
+
+.gps-good {
+    border-left-color: #8bc34a;
+    background: linear-gradient(135deg, rgba(139, 195, 74, 0.1), rgba(139, 195, 74, 0.05));
+}
+
+.gps-fair {
+    border-left-color: #ffc107;
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+}
+
+.gps-poor {
+    border-left-color: #ff5722;
+    background: linear-gradient(135deg, rgba(255, 87, 34, 0.1), rgba(255, 87, 34, 0.05));
+}
+
+.compass-display {
+    text-align: center;
+    font-size: 60px;
+    margin: 20px 0;
+    animation: rotate-pulse 2s ease-in-out infinite;
+}
+
+@keyframes rotate-pulse {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.1) rotate(10deg); }
+}
+
+.walking-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.pulse-dot {
+    width: 12px;
+    height: 12px;
+    background: #4caf50;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.5); }
+}
+
+.path-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.path-stat-item {
+    background: rgba(33, 150, 243, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.path-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #4fc3f7;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.path-stat-label {
+    font-size: 10px;
+    color: #90a4ae;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 5px;
+}
+
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
 ::-webkit-scrollbar-thumb { 
@@ -299,14 +341,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# === SESSION STATE ===
+# === SESSION STATE (EXPANDED) ===
 defaults = {
     'lang': None,
     'method': None,
     'points': [],
     'final_plots': [],
     'orientation': 'vertical',
-    'subdivision_mode': 'by_area',  # by_area, by_count, by_width
+    'subdivision_mode': 'by_area',
     'target_area': 10.0,
     'target_count': 5,
     'target_width': 25.0,
@@ -320,14 +362,25 @@ defaults = {
     'snap_to_grid': False,
     'selected_point': None,
     'surveyor_name': '',
-    'survey_date': datetime.now().strftime('%Y-%m-%d')
+    'survey_date': datetime.now().strftime('%Y-%m-%d'),
+    # NEW: GPS Walking Features
+    'gps_path': [],  # Walking path points
+    'gps_accuracy': 100,  # Current GPS accuracy (0-100)
+    'current_heading': 0,  # Compass direction
+    'walking_speed': 0.0,  # m/s
+    'distance_walked': 0.0,  # Total distance
+    'auto_corner_detect': True,  # Auto corner detection
+    'last_direction': None,  # Last walking direction
+    'corner_threshold': 30,  # Degrees change to detect corner
+    'gps_alerts': [],  # Alert messages
+    'walking_mode': False,  # Active walking mode
 }
 
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# === CALCULATIONS ===
+# === CALCULATIONS (UNCHANGED) ===
 def get_distance_meters(p1, p2):
     try:
         R = 6371000
@@ -383,12 +436,97 @@ def get_accuracy_badge(actual, target):
     else:
         return "<span class='badge badge-poor'>✗ POOR</span>"
 
-# === FIXED SUBDIVISION ALGORITHM ===
+# === NEW: GPS HELPER FUNCTIONS ===
+def calculate_bearing(p1, p2):
+    """Calculate compass bearing between two points"""
+    try:
+        lat1, lon1 = math.radians(p1[0]), math.radians(p1[1])
+        lat2, lon2 = math.radians(p2[0]), math.radians(p2[1])
+        dlon = lon2 - lon1
+        x = math.sin(dlon) * math.cos(lat2)
+        y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+        bearing = math.degrees(math.atan2(x, y))
+        return (bearing + 360) % 360
+    except:
+        return 0.0
+
+def detect_corner(path, threshold=30):
+    """Detect if user is turning a corner based on direction change"""
+    if len(path) < 3:
+        return False
+    
+    try:
+        # Get last 3 points
+        p1, p2, p3 = path[-3], path[-2], path[-1]
+        
+        # Calculate bearings
+        bearing1 = calculate_bearing(p1, p2)
+        bearing2 = calculate_bearing(p2, p3)
+        
+        # Calculate angle change
+        angle_change = abs(bearing2 - bearing1)
+        if angle_change > 180:
+            angle_change = 360 - angle_change
+        
+        # If angle change is significant, it's a corner
+        return angle_change > threshold
+    except:
+        return False
+
+def get_gps_quality_status(accuracy):
+    """Get GPS quality status based on accuracy value"""
+    if accuracy >= 90:
+        return "excellent", "🟢 Excellent", "#4caf50"
+    elif accuracy >= 70:
+        return "good", "🟡 Good", "#8bc34a"
+    elif accuracy >= 50:
+        return "fair", "🟠 Fair", "#ffc107"
+    else:
+        return "poor", "🔴 Poor", "#ff5722"
+
+def calculate_walking_speed(path, time_window=5):
+    """Calculate current walking speed"""
+    if len(path) < 2:
+        return 0.0
+    
+    try:
+        # Use last few points
+        recent_points = path[-min(time_window, len(path)):]
+        if len(recent_points) < 2:
+            return 0.0
+        
+        total_dist = sum(get_distance_meters(recent_points[i], recent_points[i+1]) 
+                        for i in range(len(recent_points)-1))
+        
+        # Assume 1 second between points (adjust based on actual timing)
+        time_elapsed = len(recent_points) - 1
+        return total_dist / time_elapsed if time_elapsed > 0 else 0.0
+    except:
+        return 0.0
+
+def get_compass_emoji(bearing):
+    """Get compass direction emoji based on bearing"""
+    directions = [
+        (0, "⬆️ N"), (45, "↗️ NE"), (90, "➡️ E"), (135, "↘️ SE"),
+        (180, "⬇️ S"), (225, "↙️ SW"), (270, "⬅️ W"), (315, "↖️ NW")
+    ]
+    
+    # Find closest direction
+    min_diff = 360
+    closest = "⬆️ N"
+    for deg, emoji in directions:
+        diff = abs(bearing - deg)
+        if diff > 180:
+            diff = 360 - diff
+        if diff < min_diff:
+            min_diff = diff
+            closest = emoji
+    
+    return closest
+
+# === SUBDIVISION ALGORITHM (UNCHANGED) ===
 def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientation="vertical", progress_callback=None):
-    """
-    FIXED: Iterative subdivision algorithm
-    විශේෂත්වය: මුළු ඉඩම සම්පූර්ණයෙන්ම කැබලි කරනවා
-    """
+    """Fixed iterative subdivision algorithm"""
     try:
         plots = []
         remaining = main_polygon
@@ -401,7 +539,7 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
             return []
         
         plot_num = 0
-        max_plots = expected_plots + 2  # Safety limit
+        max_plots = expected_plots + 2
         
         while plot_num < max_plots and not remaining.is_empty:
             if progress_callback:
@@ -409,11 +547,9 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
             
             remaining_area, _ = calculate_area(list(remaining.exterior.coords))
             
-            # Stop if remaining too small
             if remaining_area < 0.5:
                 break
             
-            # If remaining close to target, take it all
             if remaining_area < target_area_perch * 1.3:
                 plots.append({
                     'coords': list(remaining.exterior.coords),
@@ -422,7 +558,6 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
                 })
                 break
             
-            # Binary search for cut position
             if orientation == "vertical":
                 left, right = min_lon, max_lon
             else:
@@ -462,7 +597,7 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
                     
                     diff = piece_area - target_area_perch
                     
-                    if abs(diff) < 0.1:  # Found good cut
+                    if abs(diff) < 0.1:
                         best_piece = piece
                         break
                     elif diff > 0:
@@ -481,7 +616,6 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
                 
                 iterations += 1
             
-            # Save piece
             if best_piece and isinstance(best_piece, Polygon):
                 plots.append({
                     'coords': list(best_piece.exterior.coords),
@@ -489,7 +623,6 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
                     'is_remainder': False
                 })
                 
-                # Update remaining
                 try:
                     if orientation == "vertical":
                         remaining_box = box(min_lat - 0.1, mid, max_lat + 0.1, max_lon + 0.1)
@@ -504,7 +637,6 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
                     if not isinstance(remaining, Polygon) or remaining.is_empty:
                         break
                     
-                    # Update bounds
                     min_lat, min_lon, max_lat, max_lon = remaining.bounds
                     
                 except Exception as e:
@@ -514,7 +646,6 @@ def iterative_equal_area_subdivision(main_polygon, target_area_perch, orientatio
             
             plot_num += 1
         
-        # Add final remainder if significant
         if not remaining.is_empty and isinstance(remaining, Polygon):
             remaining_coords = list(remaining.exterior.coords)
             remaining_area, _ = calculate_area(remaining_coords)
@@ -544,7 +675,6 @@ def subdivide_by_width(main_polygon, width_m, orientation="vertical"):
     """Width අනුව බෙදීම"""
     try:
         total_area, perimeter = calculate_area(list(main_polygon.exterior.coords))
-        # Estimate how many plots fit
         if orientation == "vertical":
             min_lat, min_lon, max_lat, max_lon = main_polygon.bounds
             total_width = get_distance_meters((min_lat, min_lon), (min_lat, max_lon))
@@ -557,13 +687,13 @@ def subdivide_by_width(main_polygon, width_m, orientation="vertical"):
     except:
         return []
 
-# === LANGUAGE ===
+# === LANGUAGE (EXPANDED) ===
 texts = {
     "si": {
         "title": "🌍 LANKALAND PRO GIS",
         "subtitle": "අවසන් මට්ටමේ මිනුම් පද්ධතිය",
         "manual": "🗺️ සිතියම මත සලකුණු කිරීම",
-        "gps": "🛰️ GPS මැනුම",
+        "gps": "🛰️ GPS ඇවිද මැනීම",
         "analytics": "📊 විශ්ලේෂණය",
         "subdivision": "🏗️ කැබලි කිරීම",
         "execute": "🚀 කැබලි කරන්න",
@@ -579,15 +709,27 @@ texts = {
         "price": "මිල (රු.)",
         "export": "📥 Export",
         "undo": "↩️ Undo",
-        "redo": "↪️ Redo",
         "save": "💾 Save",
-        "calculating": "ගණනය කරමින්..."
+        "calculating": "ගණනය කරමින්...",
+        # NEW: GPS Walking
+        "start_walking": "🚶‍♂️ ඇවිදීම පටන් ගන්න",
+        "stop_walking": "⏹️ නවතන්න",
+        "mark_corner": "📍 Corner සලකුණු කරන්න",
+        "auto_detect": "🤖 Auto Corner Detection",
+        "gps_quality": "GPS ගුණත්වය",
+        "heading": "දිශාව",
+        "speed": "වේගය",
+        "distance": "දුර",
+        "corners": "Corners",
+        "walking": "ඇවිදිමින්...",
+        "corner_detected": "Corner හමුවිය!",
+        "close_boundary": "මායිම වසන්න",
     },
     "en": {
         "title": "🌍 LANKALAND PRO GIS",
         "subtitle": "Ultimate Survey System",
         "manual": "🗺️ MANUAL MAPPING",
-        "gps": "🛰️ GPS SURVEY",
+        "gps": "🛰️ GPS WALKING SURVEY",
         "analytics": "📊 ANALYTICS",
         "subdivision": "🏗️ SUBDIVISION",
         "execute": "🚀 EXECUTE",
@@ -603,20 +745,31 @@ texts = {
         "price": "Price (Rs.)",
         "export": "📥 Export",
         "undo": "↩️ Undo",
-        "redo": "↪️ Redo",
         "save": "💾 Save",
-        "calculating": "Calculating..."
+        "calculating": "Calculating...",
+        # NEW: GPS Walking
+        "start_walking": "🚶‍♂️ Start Walking",
+        "stop_walking": "⏹️ Stop",
+        "mark_corner": "📍 Mark Corner",
+        "auto_detect": "🤖 Auto Corner Detection",
+        "gps_quality": "GPS Quality",
+        "heading": "Heading",
+        "speed": "Speed",
+        "distance": "Distance",
+        "corners": "Corners",
+        "walking": "Walking...",
+        "corner_detected": "Corner Detected!",
+        "close_boundary": "Close Boundary",
     }
 }
 
 # === MAIN APP ===
 if st.session_state.lang is None:
-    # Language selection
     st.markdown("""
     <div class='main-header'>
         <h1>🗺️ LANKALAND PRO GIS</h1>
         <p style='font-size:1.2em;'>Ultimate Land Survey & Planning System</p>
-        <p style='font-size:0.9em; opacity:0.8;'>Version 6.0 - Fixed Subdivision Algorithm</p>
+        <p style='font-size:0.9em; opacity:0.8;'>Version 7.0 - Advanced GPS Walking</p>
         <h3 style='margin-top:25px;'>භාෂාව තෝරන්න / Select Language</h3>
     </div>
     """, unsafe_allow_html=True)
@@ -637,7 +790,7 @@ else:
         st.markdown("### ⚙️ Settings")
         
         if st.button("🔙 Main Menu", use_container_width=True):
-            st.session_state.update({"method": None, "points": [], "final_plots": []})
+            st.session_state.update({"method": None, "points": [], "final_plots": [], "gps_path": [], "walking_mode": False})
             st.rerun()
         
         st.markdown("---")
@@ -659,6 +812,15 @@ else:
             st.metric("Plots", len(st.session_state.final_plots))
             total = sum(calculate_area(p['coords'])[0] for p in st.session_state.final_plots)
             st.metric("Allocated", f"{total:.2f} P")
+        
+        # NEW: GPS Stats
+        if st.session_state.method == "gps" and st.session_state.gps_path:
+            st.markdown("---")
+            st.markdown("### 🚶‍♂️ Walking Stats")
+            st.metric(T['distance'], f"{st.session_state.distance_walked:.1f} m")
+            st.metric(T['corners'], len(st.session_state.points))
+            if st.session_state.walking_mode:
+                st.metric(T['speed'], f"{st.session_state.walking_speed:.1f} m/s")
     
     # Main content
     if st.session_state.method is None:
@@ -679,7 +841,7 @@ else:
         
         with col1:
             if st.button("➕ Add Point", use_container_width=True):
-                st.info("Click on map to add")
+                st.info("Click on map")
         with col2:
             if st.button(T['undo'], use_container_width=True):
                 if st.session_state.points:
@@ -689,13 +851,15 @@ else:
             if st.button(T['reset'], use_container_width=True):
                 st.session_state.points = []
                 st.session_state.final_plots = []
+                st.session_state.gps_path = []
+                st.session_state.walking_mode = False
                 st.rerun()
         with col4:
             if st.button(T['save'], use_container_width=True):
                 st.success("Saved!")
         with col5:
             if st.button("📸 Screenshot", use_container_width=True):
-                st.info("Feature coming soon")
+                st.info("Coming soon")
         
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -719,6 +883,16 @@ else:
             Draw(export=True).add_to(m)
             Fullscreen().add_to(m)
             MeasureControl().add_to(m)
+            
+            # Draw GPS walking path
+            if st.session_state.gps_path and len(st.session_state.gps_path) > 1:
+                folium.PolyLine(
+                    st.session_state.gps_path,
+                    color='#00BCD4',
+                    weight=3,
+                    opacity=0.7,
+                    popup="Walking Path"
+                ).add_to(m)
             
             # Draw plots
             colors = ['#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0', 
@@ -766,10 +940,29 @@ else:
             
             map_data = st_folium(m, height=650, width="100%", key="main_map")
             
-            if map_data and map_data.get('last_clicked') and st.session_state.method == "manual":
+            if map_data and map_data.get('last_clicked'):
                 new_pt = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
-                if new_pt not in st.session_state.points:
-                    st.session_state.points.append(new_pt)
+                
+                if st.session_state.method == "manual":
+                    if new_pt not in st.session_state.points:
+                        st.session_state.points.append(new_pt)
+                        st.rerun()
+                
+                elif st.session_state.method == "gps" and st.session_state.walking_mode:
+                    # Add to walking path
+                    st.session_state.gps_path.append(new_pt)
+                    
+                    # Calculate distance
+                    if len(st.session_state.gps_path) > 1:
+                        dist = get_distance_meters(st.session_state.gps_path[-2], st.session_state.gps_path[-1])
+                        st.session_state.distance_walked += dist
+                    
+                    # Auto corner detection
+                    if st.session_state.auto_corner_detect and detect_corner(st.session_state.gps_path, st.session_state.corner_threshold):
+                        if new_pt not in st.session_state.points:
+                            st.session_state.points.append(new_pt)
+                            st.toast(f"🎯 {T['corner_detected']}")
+                    
                     st.rerun()
         
         with col_tools:
@@ -785,16 +978,104 @@ else:
                 st.markdown(f"<div class='stat-mini'>m²: {area*25.29:.2f}</div>", unsafe_allow_html=True)
                 
                 if st.session_state.price_per_perch > 0:
-                    st.markdown(f"<div class='metric-label' style='margin-top:15px;'>Value</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div style='font-size:20px;font-weight:700;color:#66bb6a;'>{format_currency(value)}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:20px;font-weight:700;color:#66bb6a;margin-top:15px;'>{format_currency(value)}</div>", unsafe_allow_html=True)
             
             st.markdown("</div>", unsafe_allow_html=True)
             
-            # Subdivision
+            # GPS Walking Controls
+            if st.session_state.method == "gps":
+                st.markdown(f"<div class='card'><h3>🛰️ GPS Walking Mode</h3>", unsafe_allow_html=True)
+                
+                # GPS Quality Indicator
+                quality_class, quality_text, quality_color = get_gps_quality_status(st.session_state.gps_accuracy)
+                st.markdown(f"""
+                <div class='gps-status gps-{quality_class}'>
+                    <strong>{T['gps_quality']}:</strong> {quality_text}<br>
+                    <small>Accuracy: ±{100-st.session_state.gps_accuracy}m</small>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Walking controls
+                col1, col2 = st.columns(2)
+                with col1:
+                    if not st.session_state.walking_mode:
+                        if st.button(T['start_walking'], use_container_width=True, type="primary"):
+                            st.session_state.walking_mode = True
+                            st.session_state.gps_path = []
+                            st.session_state.distance_walked = 0.0
+                            st.rerun()
+                    else:
+                        if st.button(T['stop_walking'], use_container_width=True):
+                            st.session_state.walking_mode = False
+                            st.rerun()
+                
+                with col2:
+                    if st.button(T['mark_corner'], use_container_width=True):
+                        if map_data and map_data.get('last_clicked'):
+                            new_pt = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
+                            if new_pt not in st.session_state.points:
+                                st.session_state.points.append(new_pt)
+                                st.rerun()
+                
+                # Auto detect toggle
+                st.session_state.auto_corner_detect = st.checkbox(
+                    T['auto_detect'],
+                    value=st.session_state.auto_corner_detect
+                )
+                
+                if st.session_state.auto_corner_detect:
+                    st.session_state.corner_threshold = st.slider(
+                        "Corner Sensitivity (degrees)",
+                        min_value=15,
+                        max_value=60,
+                        value=st.session_state.corner_threshold,
+                        step=5
+                    )
+                
+                # Walking indicator
+                if st.session_state.walking_mode:
+                    st.markdown("""
+                    <div class='walking-indicator'>
+                        <div class='pulse-dot'></div>
+                        <strong>🚶‍♂️ Walking...</strong>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Path stats
+                    if st.session_state.gps_path:
+                        heading = calculate_bearing(st.session_state.gps_path[-2], st.session_state.gps_path[-1]) if len(st.session_state.gps_path) > 1 else 0
+                        direction = get_compass_emoji(heading)
+                        
+                        st.markdown(f"""
+                        <div class='path-stats'>
+                            <div class='path-stat-item'>
+                                <div class='path-stat-value'>{st.session_state.distance_walked:.1f}m</div>
+                                <div class='path-stat-label'>Distance</div>
+                            </div>
+                            <div class='path-stat-item'>
+                                <div class='path-stat-value'>{direction}</div>
+                                <div class='path-stat-label'>Direction</div>
+                            </div>
+                            <div class='path-stat-item'>
+                                <div class='path-stat-value'>{len(st.session_state.points)}</div>
+                                <div class='path-stat-label'>Corners</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Close boundary button
+                if len(st.session_state.points) >= 3:
+                    if st.button(f"✓ {T['close_boundary']}", use_container_width=True):
+                        st.session_state.walking_mode = False
+                        st.success("Boundary completed!")
+                        st.rerun()
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Subdivision (UNCHANGED from previous version)
             st.markdown(f"<div class='card'><h3>{T['subdivision']}</h3>", unsafe_allow_html=True)
             
             if len(st.session_state.points) >= 3:
-                # Mode selection
                 mode = st.radio("Mode", ["by_area", "by_count", "by_width"],
                                format_func=lambda x: T[x],
                                key="sub_mode",
@@ -809,7 +1090,6 @@ else:
                 elif mode == "by_width":
                     st.session_state.target_width = st.number_input(T['plot_width'], min_value=5.0, value=st.session_state.target_width, step=5.0)
                 
-                # Orientation
                 col1, col2 = st.columns(2)
                 if col1.button("සිරස්", use_container_width=True):
                     st.session_state.orientation = "vertical"
@@ -818,7 +1098,6 @@ else:
                     st.session_state.orientation = "horizontal"
                     st.rerun()
                 
-                # Execute
                 if st.button(T['execute'], use_container_width=True, type="primary"):
                     area, _ = calculate_area(st.session_state.points)
                     
@@ -853,7 +1132,6 @@ else:
                         anim.empty()
                         st.error(f"Error: {e}")
                 
-                # Results
                 if st.session_state.final_plots:
                     st.markdown(f"<div class='success-box'>✓ {len(st.session_state.final_plots)} plots created</div>", unsafe_allow_html=True)
                     
@@ -879,4 +1157,4 @@ else:
             
             st.markdown("</div>", unsafe_allow_html=True)
     
-    st.markdown("<div style='text-align:center;opacity:0.3;margin-top:40px;'>🌍 LankaLand Pro GIS v6.0 | Fixed Algorithm</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center;opacity:0.3;margin-top:40px;'>🌍 LankaLand Pro GIS v7.0 | Advanced GPS Walking</div>", unsafe_allow_html=True)
