@@ -368,3 +368,6 @@ else:
                 st.rerun()
 
     st.markdown("<p style='text-align:center; opacity:0.5; margin-top:20px;'>LankaLand Pro v26.0 | Advanced GIS Core</p>", unsafe_allow_html=True)
+
+
+මම කියන්නේ මේකට ඕකත් එකතු කරලා මට හරියට දෙන්න කියලා
