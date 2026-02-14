@@ -2,8 +2,7 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from folium.plugins import LocateControl, Fullscreen, MeasureControl
-from shapely.geometry import Polygon, MultiPolygon
-from shapely.ops import split
+from shapely.geometry import Polygon
 import math
 
 # --- Configuration & Styling ---
@@ -40,8 +39,6 @@ st.markdown("""
     .card { background: #1d2129; padding: 20px; border-radius: 15px; border: 1px solid #30363d; margin-bottom: 15px; }
     .metric-val { font-size: 24px; font-weight: 800; color: #4caf50; }
     .plot-result { background-color: #1d2129; border: 1px solid #4caf50; border-radius: 8px; padding: 10px; margin-top: 10px; }
-    .lang-button { margin: 5px; padding: 10px 20px; border-radius: 8px; border: 1px solid #4caf50; background-color: #1d2129; color: #4caf50; font-weight: bold; cursor: pointer; }
-    .lang-button:hover { background-color: #4caf50; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -81,4 +78,103 @@ texts = {
         "not_enough_land": "⚠️ ප්‍රමාණවත් ඉඩමක් සලකුණු කර නැත.",
         "change_lang": "🌐 භාෂාව මාරු කරන්න",
         "orientation": "දිශාව:",
-        "vertical": "සිර
+        "vertical": "සිරස්",
+        "horizontal": "තිරස්",
+        "processing_split": "බෙදීම් සැකසෙමින් පවතී...",
+        "plot_tooltip": "කැබැල්ල: {label} ({area:.2f}P)"
+    },
+    "en": {
+        "title": "🌍 LANKALAND PRO GIS",
+        "subtitle": "International Standard Surveying & Subdivision System",
+        "select_lang": "SELECT LANGUAGE",
+        "manual_marking": "🗺️ MANUAL SATELLITE MARKING",
+        "gps_survey": "🛰️ LIVE GPS FIELD SURVEY",
+        "back_to_menu": "🔙 BACK TO MAIN MENU",
+        "analytics_title": "📊 ANALYTICS",
+        "total_area": "Total Area",
+        "perch_unit": "P",
+        "value_per_perch": "Value per Perch (LKR):",
+        "total_value": "Total Value",
+        "subdivision_engine": "🏗️ SUBDIVISION ENGINE",
+        "split_method": "Split Method:",
+        "fixed_area": "Fixed Area (e.g. 25P)",
+        "equal_shares": "Equal Shares (e.g. 5 Lots)",
+        "target_value": "Target Value:",
+        "execute_split": "🚀 EXECUTE SUBDIVISION",
+        "clear_plots": "🔄 CLEAR PLOTS",
+        "reset_map": "🗑️ RESET MAP",
+        "remainder_label": "REM",
+        "plot_label_prefix": "Plot",
+        "sub_success": "Subdivision Success: {num_plots} full plots created.",
+        "not_enough_land": "⚠️ Not enough land marked.",
+        "change_lang": "🌐 Change Language",
+        "orientation": "Orientation:",
+        "vertical": "Vertical",
+        "horizontal": "Horizontal",
+        "processing_split": "Processing subdivision...",
+        "plot_tooltip": "Plot: {label} ({area:.2f}P)"
+    }
+}
+
+def calculate_polygon_area_perch(coords):
+    if not coords or len(coords) < 3: return 0.0
+    polygon = Polygon(coords)
+    area_sq_deg = polygon.area
+    avg_lat_rad = math.radians(coords[0][0]) 
+    area_m2 = area_sq_deg * (111319.9 ** 2) * abs(math.cos(avg_lat_rad))
+    return area_m2 / 25.29
+
+if st.session_state.lang is None:
+    st.markdown("<div class='main-header'><h1>භාෂාව තෝරන්න / SELECT LANGUAGE</h1></div>", unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("සිංහල", key="lang_si"): st.session_state.lang = "si"; st.rerun()
+    with c2:
+        if st.button("ENGLISH", key="lang_en"): st.session_state.lang = "en"; st.rerun()
+else:
+    T = texts[st.session_state.lang]
+    st.sidebar.markdown(f"### {T['title']}")
+    if st.sidebar.button(T['back_to_menu']):
+        st.session_state.update({"method": None, "points": [], "edit_idx": -1, "final_plots": [], 'total_area_perch': 0.0})
+        st.rerun()
+    
+    if st.session_state.method is None:
+        st.markdown(f"<div class='main-header'><h1>{T['title']}</h1><p>{T['subtitle']}</p></div>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        if col1.button(T['manual_marking']): st.session_state.method = "manual"; st.rerun()
+        if col2.button(T['gps_survey']): st.session_state.method = "gps"; st.rerun()
+    else:
+        col_map, col_tools = st.columns([2.5, 1])
+        with col_map:
+            m = folium.Map(location=[7.8731, 80.7718], zoom_start=18, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Satellite")
+            Fullscreen().add_to(m)
+            LocateControl().add_to(m)
+            MeasureControl().add_to(m)
+
+            if len(st.session_state.points) >= 3:
+                folium.Polygon(locations=st.session_state.points, color="#ffeb3b", weight=4).add_to(m)
+            
+            for i, p in enumerate(st.session_state.points):
+                folium.CircleMarker(location=p, radius=6, color="#4CAF50", fill=True).add_to(m)
+
+            map_data = st_folium(m, height=600, width="100%", key="gis_map")
+
+            if map_data['last_clicked']:
+                clicked = (map_data['last_clicked']['lat'], map_data['last_clicked']['lng'])
+                st.session_state.points.append(clicked)
+                st.rerun()
+
+        with col_tools:
+            st.markdown(f"<div class='card'><h3>{T['analytics_title']}</h3>", unsafe_allow_html=True)
+            if len(st.session_state.points) >= 3:
+                st.session_state.total_area_perch = calculate_polygon_area_perch(st.session_state.points)
+                st.markdown(f"{T['total_area']}: <span class='metric-val'>{st.session_state.total_area_perch:.2f} {T['perch_unit']}</span>", unsafe_allow_html=True)
+            else:
+                st.info(T['not_enough_land'])
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            if st.button(T['reset_map']):
+                st.session_state.update({"points": [], "final_plots": [], 'total_area_perch': 0.0})
+                st.rerun()
+
+    st.markdown("<p style='text-align:center; opacity:0.5;'>LankaLand Pro v26.0</p>", unsafe_allow_html=True)
